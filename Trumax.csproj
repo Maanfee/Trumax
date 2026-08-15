@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!--**********************************************-->
+    <TieredPGO>true</TieredPGO>
+    <DebugType>none</DebugType>
+    <!--**********************************************-->
+    <ScopedCssEnabled>true</ScopedCssEnabled>
+    <EnableDefaultScopedCssItems>true</EnableDefaultScopedCssItems>
+    <!--**********************************************-->
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Maanfee.Dashboard.Views.Core" Version="9.15.5" />
+  </ItemGroup>
+
+</Project>

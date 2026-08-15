@@ -1,0 +1,101 @@
+﻿
+<MudDialog>
+    <DialogContent>
+        <MudCard Outlined="true" Square="true" Class="mt-4 mb-4">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudAvatar Color="Color.Secondary" Size="Size.Small"></MudAvatar>
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    Connect
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudIconButton OnClick="@(() => Close())" Icon="@Icons.Material.Filled.Close" Color="Color.Error" />
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudDivider DividerType="DividerType.FullWidth" />
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem md="12">
+                        <MudTextField @bind-Value="ViewModel.ServerName" For="@(() => ViewModel.ServerName)"
+                                      Label="Server Name" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                      Placeholder="Example: localhost Or .\\SQLEXPRESS" Clearable />
+                    </MudItem>
+                    <MudItem md="12">
+                        <MudSelect Label="Authentication" Variant="Variant.Outlined" Dense="true"
+                                   @bind-Value="ViewModel.IdAuthentication">
+                            @foreach (var item in ViewModel.Authentications)
+                            {
+                                <MudSelectItem Value="@item?.Id">@item?.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem md="12">
+                        <MudTextField @bind-Value="ViewModel.UserName" For="@(() => ViewModel.UserName)"
+                                      Disabled="@(ViewModel.IdAuthentication == 2 ? false : true)" Margin="Margin.Dense"
+                                      Label="UserName" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem md="12">
+                        <MudTextField Label="Password" Variant="Variant.Outlined"
+                                      @bind-Value="ViewModel.Password" For="@(() => ViewModel.Password)"
+                                      Disabled="@(ViewModel.IdAuthentication == 2 ? false : true)" Margin="Margin.Dense"
+                                      InputType="@PasswordInput" Adornment="Adornment.End" AdornmentIcon="@PasswordInputIcon"
+                                      OnAdornmentClick="TogglePasswordVisibility" />
+                    </MudItem>
+
+                    @*    <MudItem xs="12">
+                        <MudText Typo="Typo.body2" Class="mb-2">Connection String:</MudText>
+                        <MudTextField Variant="Variant.Outlined" Lines="3" T="string" />
+                    </MudItem> *@
+                </MudGrid>
+
+                @*   @if (Login.IsLoading)
+                {
+                    <MudItem xs="12" Class="text-center mt-4">
+                        <MudProgressCircular Indeterminate="true" />
+                        <MudText Typo="Typo.body2">Connecting to the server ...</MudText>
+                    </MudItem>
+                } *@
+                @*  @if (!string.IsNullOrEmpty(Login.ErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-3">
+                        @Login.ErrorMessage
+                    </MudAlert>
+                } *@
+            </MudCardContent>
+            <MudCardActions>
+                <MudGrid>
+                    <MudItem md="12">
+                        <MudDivider DividerType="DividerType.FullWidth" />
+                    </MudItem>
+                    <MudItem md="4">
+                        <MudButton OnClick="ConnectAsync" Variant="Variant.Filled" Color="Color.Success" FullWidth="true">
+                            Connect
+                        </MudButton>
+                    </MudItem>
+                    <MudItem md="4">
+                        <MudButton OnClick="TestConnectionAsync" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true">
+                            Test
+                        </MudButton>
+                    </MudItem>
+                    <MudItem md="4">
+                        <MudButton OnClick="Close" Variant="Variant.Filled" Color="Color.Warning" FullWidth="true">
+                            Cancel
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudCardActions>
+        </MudCard>
+    </DialogContent>
+</MudDialog>
+
+@code {
+
+    [CascadingParameter]
+    public IMudDialogInstance? MudDialog { get; set; }
+
+    public void Close() => MudDialog?.CancelAll();
+
+    // *****************************************************
+
+}

@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="Trumax.Examples/Trumax.Examples.Client/Trumax.Examples.Client.csproj" />
+  <Project Path="Trumax.Examples/Trumax.Examples/Trumax.Examples.csproj" />
+  <Project Path="Trumax.Services/Trumax.Services.csproj" Id="854350d8-2e08-4acc-8bad-2eb334ac9cd7" />
+  <Project Path="Trumax.View/Trumax.View.csproj" Id="07b378dd-bd50-4f36-af6a-b240f72d2325" />
+</Solution>

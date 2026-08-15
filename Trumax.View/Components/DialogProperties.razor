@@ -1,0 +1,198 @@
+﻿<MudDialog>
+    <DialogContent>
+        <MudCard Outlined="true" Square="true" Class="mt-4 mb-4">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudAvatar Color="Color.Secondary" Size="Size.Small"></MudAvatar>
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    Database Properties - @Database
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudIconButton OnClick="@(() => Close())" Icon="@Icons.Material.Filled.Close" Color="Color.Error" />
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudDivider DividerType="DividerType.FullWidth" />
+            <MudCardContent>
+                <MudGrid Class="pa-6">
+                    @if (Loading)
+                    {
+                        <MudItem xs="12" Class="d-flex justify-center pa-4">
+                            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                        </MudItem>
+                    }
+                    else if (SizeInfo != null)
+                    {
+                        <MudItem md="12">
+                            <div class="d-flex align-center my-2">
+                                <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" Color="Color.Primary" Class="mr-2" />
+                                <MudText Typo="Typo.caption" Color="Color.Primary">Data Size: @SizeInfo.DataSizeMB.ToString("N2") MB</MudText>
+                            </div>
+                        </MudItem>
+                        <MudItem md="12">
+                            <div class="d-flex align-center my-2">
+                                <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" Color="Color.Warning" Class="mr-2" />
+                                <MudText Typo="Typo.caption" Color="Color.Warning">Log Size: @SizeInfo.LogSizeMB.ToString("N2") MB</MudText>
+                            </div>
+                        </MudItem>
+                        <MudItem md="12">
+                            <div class="d-flex align-center my-2">
+                                <MudIcon Icon="@Icons.Material.Filled.SdStorage" Size="Size.Small" Color="Color.Success" Class="mr-2" />
+                                <MudText Typo="Typo.caption" Color="Color.Success">Total Size: @SizeInfo.TotalSizeMB.ToString("N2") MB</MudText>
+                            </div>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudCardContent>
+            <MudCardActions>
+                <MudGrid>
+                    <MudItem md="12">
+                        <MudDivider DividerType="DividerType.FullWidth" />
+                    </MudItem>
+                    <MudItem md="4">
+                        <MudButton OnClick="ShrinkLogFileAsync" Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                   Disabled="@Shrinking">
+                            @if (Shrinking)
+                            {
+                                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                            }
+                            Shrink Log File
+                        </MudButton>
+                    </MudItem>
+                    <MudItem md="4">
+
+                    </MudItem>
+                    <MudItem md="4">
+
+                    </MudItem>
+                </MudGrid>
+            </MudCardActions>
+        </MudCard>
+    </DialogContent>
+</MudDialog>
+
+@code {
+
+    [CascadingParameter]
+    public IMudDialogInstance? MudDialog { get; set; }
+
+    public void Close() => MudDialog?.Close();
+
+    // *****************************************************
+
+    [Parameter]
+    public string? Database { get; set; }
+
+    [Parameter]
+    public Login? ConnectionInfo { get; set; }
+
+    private DatabaseSizeInfo? SizeInfo;
+    private bool Loading = true;
+
+    protected async override Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+
+        await LoadDatabaseSize();
+    }
+
+    private async Task LoadDatabaseSize()
+    {
+        Loading = true;
+
+        try
+        {
+            var request = new SchemaRequest
+            {
+                ServerName = ConnectionInfo?.ServerName,
+                UserName = ConnectionInfo?.UserName,
+                Password = ConnectionInfo?.Password,
+                IdAuthentication = ConnectionInfo?.IdAuthentication ?? 0,
+                DatabaseName = Database
+            };
+
+            var response = await Http!.PostAsJsonAsync("api/SqlServerdbManager/GetDatabaseSize", request);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<CallbackResult<DatabaseSizeInfo>>();
+                if (result?.Data != null)
+                {
+                    SizeInfo = result.Data;
+                }
+                else
+                {
+                    Snackbar!.Add(result!.Error!.Message!, Severity.Error);
+                }
+            }
+            else
+            {
+                Snackbar!.Add(await response.Content.ReadAsStringAsync(), Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar!.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+    private bool Shrinking;
+
+    private async Task ShrinkLogFileAsync()
+    {
+        var confirmed = await Dialog!.ShowMessageBoxAsync(
+            "Confirm",
+            $"This will change the recovery model of '{Database}' to SIMPLE and back to FULL, then shrink the log file. Continue?",
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        Shrinking = true;
+        StateHasChanged();
+
+        try
+        {
+            var request = new ShrinkLogRequest
+            {
+                ServerName = ConnectionInfo?.ServerName,
+                UserName = ConnectionInfo?.UserName,
+                Password = ConnectionInfo?.Password,
+                IdAuthentication = ConnectionInfo?.IdAuthentication ?? 0,
+                DatabaseName = Database,
+                TargetSizeMB = 1
+            };
+
+            var response = await Http!.PostAsJsonAsync("api/SqlServerdbManager/ShrinkLogFile", request);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<CallbackResult<DatabaseSizeInfo>>();
+                if (result?.Data != null)
+                {
+                    SizeInfo = result.Data;
+                    Snackbar!.Add("Log file shrunk successfully.", Severity.Success);
+                }
+                else
+                {
+                    Snackbar!.Add(result!.Error!.Message!, Severity.Error);
+                }
+            }
+            else
+            {
+                Snackbar!.Add(await response.Content.ReadAsStringAsync(), Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar!.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            Shrinking = false;
+        }
+    }
+
+}

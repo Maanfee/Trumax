@@ -1,0 +1,510 @@
+﻿<MudDialog>
+    <DialogContent>
+        <MudCard Outlined="true" Square="true" Class="mt-4 mb-4">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudAvatar Color="Color.Secondary" Size="Size.Small"></MudAvatar>
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    Solution
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudIconButton OnClick="@(() => Close())" Icon="@Icons.Material.Filled.Close" Color="Color.Error" />
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudDivider DividerType="DividerType.FullWidth" />
+            <MudCardContent>
+                <MudStack Class="mud-width-full mud-height-full" Justify="Justify.Center" AlignItems="AlignItems.Center"
+                          Style="@Height">
+                    <MudSplitPanel Class="mud-width-full mud-height-full" Horizontal="false" Rounded Elevation="1"
+                                   FirstPanelInitialSize="350" MinPanelSize="300">
+                        <FirstPanel>
+                            <MudStack Class="mud-width-full mud-height-full pa-2" Style="overflow-y:auto;">
+                                @if (BackupRunning)
+                                {
+                                    <MudStack Class="pa-2">
+                                        <MudText Typo="Typo.caption">Backing up... @BackupPercent%</MudText>
+                                        <MudProgressLinear Color="Color.Primary" Value="@BackupPercent" />
+                                    </MudStack>
+                                }
+                                <MudTreeView T="TreeNode" Items="TreeItems" ServerData="LoadServerData" Hover="true">
+                                    <ItemTemplate>
+                                        <MudTreeViewItem Value="@context.Value"
+                                                         Items="@context.Children"
+                                                         Text="@context.Value?.Text"
+                                                         Icon="@GetIcon(context.Value?.NodeType)"
+                                                         CanExpand="@(context.Value?.HasChildren ?? false)">
+                                            <BodyContent Context="BodyContentContext">
+                                                @if (context.Value?.NodeType == TreeNodeType.Database)
+                                                {
+                                                    <MudMenu Label="@context.Value.Text" Dense="true"
+                                                             ActivationEvent="@MouseEvent.RightClick">
+                                                        <ChildContent>
+                                                            <MudMenuItem OnClick="@(() => OnNewQuery(context.Value))">
+                                                                New Query
+                                                            </MudMenuItem>
+                                                            <MudMenu Label="Tasks">
+                                                                <MudMenuItem OnClick="@(() => OnBackup(context.Value))">
+                                                                    Backup
+                                                                </MudMenuItem>
+                                                            </MudMenu>
+                                                            <MudDivider />
+                                                            <MudMenuItem OnClick="@(() => OnProperties(context.Value))">
+                                                                Properties
+                                                            </MudMenuItem>
+                                                        </ChildContent>
+                                                    </MudMenu>
+                                                }
+                                                else
+                                                {
+                                                    <MudText>@context.Value?.Text</MudText>
+                                                }
+                                            </BodyContent>
+                                        </MudTreeViewItem>
+                                    </ItemTemplate>
+                                </MudTreeView>
+                            </MudStack>
+                        </FirstPanel>
+                        <SecondPanel>
+                            @if (string.IsNullOrEmpty(QueryDatabase))
+                            {
+                                <MudStack Justify="Justify.Center" AlignItems="AlignItems.Center" Class="mud-width-full mud-height-full">
+                                    <MudText Typo="Typo.body2" Color="Color.Dark">Right-click a database and choose "New Query" to start.</MudText>
+                                </MudStack>
+                            }
+                            else
+                            {
+                                <MudStack Class="mud-width-full mud-height-full pa-2" Spacing="2">
+                                    <MudSplitPanel Class="mud-width-full mud-height-full" Horizontal="true" Transparent="true" Rounded="true" Elevation="1">
+                                        <FirstPanel>
+                                            <MudToolBar>
+                                                <MudIconButton Color="Color.Success" Disabled="@QueryRunning"
+                                                               Icon="@Icons.Material.Filled.PlayArrow"
+                                                               OnClick="ExecuteQueryAsync" />
+                                                <MudSpacer />
+                                                @if (QueryResult != null)
+                                                {
+                                                    <MudText Typo="Typo.caption" Color="Color.Dark">
+                                                        @QueryResult.Rows.Count row(s) @(QueryResult.Truncated ? "(truncated at 5000)" : "") in @QueryResult.ElapsedMs ms
+                                                    </MudText>
+                                                }
+                                            </MudToolBar>
+
+                                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                                <MudText Typo="Typo.subtitle2">@QueryDatabase</MudText>
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">Read-only (SELECT only)</MudChip>
+                                            </MudStack>
+
+                                            <MudTextField T="string" @bind-Value="QueryText" Lines="6" Variant="Variant.Outlined"
+                                                          Placeholder="SELECT TOP 100 * FROM ..." />
+                                        </FirstPanel>
+                                        <SecondPanel>
+                                            <MudStack Class="mud-width-full mud-height-full" Style="overflow:hidden;" Spacing="2">
+                                                @if (!string.IsNullOrEmpty(QueryError))
+                                                {
+                                                    <MudAlert Severity="Severity.Error" Dense="true" Class="ma-2">@QueryError</MudAlert>
+                                                }
+
+                                                @if (QueryResult != null)
+                                                {
+                                                    <div style="flex:1 1 auto; min-height:0; overflow:auto; margin:0 8px 8px 8px; border:1px solid var(--mud-palette-lines-default); border-radius:4px;">
+                                                        <table style="width:max-content; min-width:100%; border-collapse:separate; border-spacing:0;">
+                                                            <thead>
+                                                                <tr>
+                                                                    @foreach (var col in QueryResult.Columns)
+                                                                    {
+                                                                        <th style="text-align:left; white-space:nowrap; padding:8px 12px;
+                                                                            position:sticky; top:0; z-index:2;
+                                                                            background:var(--mud-palette-background-grey);
+                                                                            border-bottom:2px solid var(--mud-palette-lines-default);">
+                                                                            @col
+                                                                        </th>
+                                                                    }
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @for (int i = 0; i < QueryResult.Rows.Count; i++)
+                                                                {
+                                                                    var row = QueryResult.Rows[i];
+                                                                    var rowBg = i % 2 == 0 ? "transparent" : "var(--mud-palette-background-grey)";
+                                                                    <tr style="background:@rowBg;">
+                                                                        @foreach (var cell in row)
+                                                                        {
+                                                                            <td style="white-space:nowrap; padding:6px 12px;
+                                                                                border-top:1px solid var(--mud-palette-lines-default);">
+                                                                                @(cell?.ToString() ?? "NULL")
+                                                                            </td>
+                                                                        }
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+                                                else if (string.IsNullOrEmpty(QueryError))
+                                                {
+                                                    <MudStack Justify="Justify.Center" AlignItems="AlignItems.Center" Class="mud-width-full mud-height-full">
+                                                        <MudText Typo="Typo.body2" Color="Color.Dark">Run a query to see results here.</MudText>
+                                                    </MudStack>
+                                                }
+                                            </MudStack>
+                                        </SecondPanel>
+                                    </MudSplitPanel>
+                                </MudStack>
+                            }
+                        </SecondPanel>
+                    </MudSplitPanel>
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </DialogContent>
+</MudDialog>
+
+@code {
+
+    [CascadingParameter]
+    public IMudDialogInstance? MudDialog { get; set; }
+
+    public void Close() => MudDialog?.Close();
+
+    // *****************************************************
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        await OpenConnectDialog();
+    }
+
+    private string Height { get; set; } = "height: calc(100vh - 220px)";
+
+    #region - Connect -
+
+    private async Task OpenConnectDialog()
+    {
+        DialogParameters DialogParameters = new DialogParameters();
+
+        var dialog = await Dialog!.ShowAsync<DialogConnect>(string.Empty, DialogParameters,
+            new DialogOptions()
+            {
+                NoHeader = true,
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true,
+                Position = DialogPosition.Center,
+                BackgroundClass = "Dialog-Blur",
+                BackdropClick = false,
+            });
+
+        var result = await dialog.Result;
+
+        if (!result!.Canceled)
+        {
+            if (result.Data != null)
+            {
+                ConnectionInfo = (Login)result.Data;
+                await DataLoad();
+            }
+        }
+    }
+
+    #endregion
+
+    private Login? ConnectionInfo;
+    private List<TreeItemData<TreeNode>> TreeItems = new();
+
+    private async Task DataLoad()
+    {
+        try
+        {
+            var response = await Http!.PostAsJsonAsync("api/SqlServerdbManager/GetDatabases", ConnectionInfo);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<CallbackResult<List<TreeNode>>>();
+                if (result?.Data != null)
+                {
+                    TreeItems = ToTreeItemData(result.Data);
+                }
+                else
+                {
+                    Snackbar!.Add(result!.Error!.Message!, Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar!.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    // این متد وقتی هر گره باز (Expand) می‌شود صدا زده می‌شود
+    private async Task<IReadOnlyCollection<TreeItemData<TreeNode>>> LoadServerData(TreeNode parentNode)
+    {
+        try
+        {
+            if (parentNode.NodeType == TreeNodeType.Database)
+            {
+                var request = new SchemaRequest
+                {
+                    ServerName = ConnectionInfo!.ServerName,
+                    UserName = ConnectionInfo.UserName,
+                    Password = ConnectionInfo.Password,
+                    IdAuthentication = ConnectionInfo.IdAuthentication,
+                    DatabaseName = parentNode.Id
+                };
+
+                var response = await Http!.PostAsJsonAsync("api/SqlServerdbManager/GetTables", request);
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<CallbackResult<List<TreeNode>>>();
+                    if (result?.Data != null)
+                        return ToTreeItemData(result.Data);
+                }
+            }
+            else if (parentNode.NodeType == TreeNodeType.Table)
+            {
+                var idParts = parentNode.Id.Split('|'); // Database|Schema.Table
+                var request = new SchemaRequest
+                {
+                    ServerName = ConnectionInfo!.ServerName,
+                    UserName = ConnectionInfo.UserName,
+                    Password = ConnectionInfo.Password,
+                    IdAuthentication = ConnectionInfo.IdAuthentication,
+                    DatabaseName = idParts[0],
+                    TableName = idParts[1]
+                };
+
+                var response = await Http!.PostAsJsonAsync("api/SqlServerdbManager/GetColumns", request);
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<CallbackResult<List<TreeNode>>>();
+                    if (result?.Data != null)
+                        return ToTreeItemData(result.Data);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar!.Add(ex.Message, Severity.Error);
+        }
+
+        return new List<TreeItemData<TreeNode>>().AsReadOnly();
+    }
+
+    private string GetIcon(TreeNodeType? type) => type switch
+    {
+        TreeNodeType.Database => Icons.Material.Filled.Storage,
+        TreeNodeType.Table => Icons.Material.Filled.TableChart,
+        TreeNodeType.Column => Icons.Material.Filled.ViewColumn,
+        _ => Icons.Material.Filled.Circle
+    };
+
+    private static List<TreeItemData<TreeNode>> ToTreeItemData(List<TreeNode> nodes)
+    {
+        return nodes.Select(n => new TreeItemData<TreeNode>
+        {
+            Value = n,
+            Text = n.Text,
+            Expandable = n.HasChildren
+        }).ToList();
+    }
+
+    private void OnNewQuery(TreeNode? node)
+    {
+        if (node == null)
+            return;
+
+        QueryDatabase = node.Id;
+        QueryText = string.Empty;
+        QueryResult = null;
+        QueryError = null;
+    }
+
+    #region - Database Context Menu -
+
+    private bool BackupRunning;
+    private int BackupPercent;
+    private string? BackupJobId;
+    private Timer? ProgressTimer;
+
+    private async Task OnBackup(TreeNode? node)
+    {
+        if (node == null)
+            return;
+
+        var confirmed = await Dialog!.ShowMessageBoxAsync(
+            "Confirm Backup",
+            $"This will take a full backup of '{node.Text}'. Continue?",
+            yesText: "Yes", cancelText: "Cancel");
+
+        if (confirmed != true)
+            return;
+
+        try
+        {
+            var request = new SchemaRequest
+            {
+                ServerName = ConnectionInfo!.ServerName,
+                UserName = ConnectionInfo.UserName,
+                Password = ConnectionInfo.Password,
+                IdAuthentication = ConnectionInfo.IdAuthentication,
+                DatabaseName = node.Id
+            };
+
+            var response = await Http!.PostAsJsonAsync("api/SqlServerdbManager/StartBackup", request);
+            if (!response.IsSuccessStatusCode)
+            {
+                Snackbar!.Add(await response.Content.ReadAsStringAsync(), Severity.Error);
+                return;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<CallbackResult<string>>();
+            if (result?.Data == null)
+            {
+                Snackbar!.Add(result!.Error!.Message!, Severity.Error);
+                return;
+            }
+
+            BackupJobId = result.Data;
+            BackupRunning = true;
+            BackupPercent = 0;
+            StateHasChanged();
+
+            ProgressTimer = new Timer(async _ => await PollProgress(), null, 0, 1000);
+        }
+        catch (Exception ex)
+        {
+            Snackbar!.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task PollProgress()
+    {
+        if (BackupJobId == null) return;
+
+        try
+        {
+            var response = await Http!.GetAsync($"api/SqlServerdbManager/BackupProgress/{BackupJobId}");
+            if (!response.IsSuccessStatusCode) return;
+
+            var result = await response.Content.ReadFromJsonAsync<CallbackResult<BackupJobStatus>>();
+            var status = result?.Data;
+            if (status == null) return;
+
+            BackupPercent = status.PercentComplete;
+
+            if (status.Failed)
+            {
+                await ProgressTimer!.DisposeAsync();
+                BackupRunning = false;
+                Snackbar!.Add($"Backup failed: {status.ErrorMessage}", Severity.Error);
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            if (status.Completed)
+            {
+                await ProgressTimer!.DisposeAsync();
+                BackupRunning = false;
+                await InvokeAsync(StateHasChanged);
+
+                // شروع دانلود در تب جدید (مرورگر خودش Stream را می‌گیرد)
+                await JSRuntime!.InvokeVoidAsync("open", $"api/SqlServerdbManager/BackupDownload/{BackupJobId}", "_blank");
+
+                Snackbar!.Add("Backup ready. Download started.", Severity.Success);
+                return;
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // خطاهای موقت Polling را نادیده می‌گیریم
+        }
+    }
+
+    private async Task OnProperties(TreeNode? node)
+    {
+        if (node == null)
+            return;
+
+        DialogParameters DialogParameters = new DialogParameters();
+        DialogParameters.Add("Database", node.Text);
+        DialogParameters.Add("ConnectionInfo", ConnectionInfo);
+
+        var dialog = await Dialog!.ShowAsync<DialogProperties>(string.Empty, DialogParameters,
+            new DialogOptions()
+            {
+                NoHeader = true,
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true,
+                Position = DialogPosition.Center,
+                BackgroundClass = "Dialog-Blur",
+                BackdropClick = true,
+                CloseOnEscapeKey = true,
+            });
+    }
+
+    #endregion
+
+    #region - Query -
+
+    private string? QueryDatabase;
+    private string QueryText = string.Empty;
+    private bool QueryRunning;
+    private string? QueryError;
+    private QueryResult? QueryResult;
+
+    private async Task ExecuteQueryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(QueryText) || string.IsNullOrEmpty(QueryDatabase))
+            return;
+
+        QueryRunning = true;
+        QueryError = null;
+        QueryResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new QueryRequest
+            {
+                ServerName = ConnectionInfo!.ServerName,
+                UserName = ConnectionInfo.UserName,
+                Password = ConnectionInfo.Password,
+                IdAuthentication = ConnectionInfo.IdAuthentication,
+                DatabaseName = QueryDatabase,
+                QueryText = QueryText
+            };
+
+            var response = await Http!.PostAsJsonAsync("api/SqlServerdbManager/ExecuteQuery", request);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<CallbackResult<QueryResult>>();
+                if (result?.Data != null)
+                {
+                    QueryResult = result.Data;
+                }
+                else
+                {
+                    QueryError = result!.Error!.Message;
+                }
+            }
+            else
+            {
+                QueryError = await response.Content.ReadAsStringAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            QueryError = ex.Message;
+        }
+        finally
+        {
+            QueryRunning = false;
+            StateHasChanged();
+        }
+    }
+
+    #endregion
+
+}
