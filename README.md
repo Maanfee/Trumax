@@ -14,26 +14,6 @@ Trumax is a lightweight, web-based SQL Server database manager built with **Blaz
 - **Log file shrink** — switch a database to `SIMPLE` recovery, shrink the log file, and switch it back to `FULL`, with the updated size shown immediately.
 - **Full database backup & download** — take a full, compressed backup on the server and stream it straight to the browser as a `.zip` download, with a live progress bar, without ever needing direct file-system or network-share access to the SQL Server machine.
 
-## Project Structure
-
-```
-Trumax/
-├── Trumax.View/                      Razor component library (UI)
-│   ├── Components/
-│   │   ├── DialogSolution.razor      Main dialog: schema tree + query editor
-│   │   ├── DialogConnect.razor       Server connection dialog
-│   │   └── DialogProperties.razor    Database properties / shrink log dialog
-│   └── ViewModels/                   DTOs shared between client and API
-│       ├── Login.cs, SchemaRequest.cs, ShrinkLogRequest.cs, QueryRequest.cs
-│       ├── TreeNode.cs, TreeNodeType.cs
-│       ├── DatabaseSizeInfo.cs, QueryResult.cs, BackupJobStatus.cs
-│       └── Authentication.cs
-├── Trumax.Services/
-│   └── Controllers/
-│       └── SqlServerdbManagerController.cs   All server-side SQL Server logic
-└── Trumax.Examples/                  Sample host app (Blazor Web App) wiring it together
-```
-
 ## How It Works
 
 ### Schema browsing
@@ -68,10 +48,27 @@ WITH RECOVERY
 
 ## Requirements
 
+> ⚠️ **The SQL login used to connect must be a member of the `sysadmin` fixed server role.**
+> The app relies on several server-level operations that, by default, only `sysadmin` can execute:
+> - `xp_create_subdir` / `xp_delete_file` (create/clean up the backup temp folder)
+> - `OPENROWSET(...SINGLE_BLOB)` (stream a backup file back for download)
+> - `sp_configure 'Ad Hoc Distributed Queries'`
+> - `ALTER DATABASE ... SET RECOVERY` and `DBCC SHRINKFILE` (log shrink)
+> - `BACKUP DATABASE` on arbitrary databases
+>
+> If you don't want to grant `sysadmin`, you can instead grant each permission individually to a lower-privileged login (see below) — but this is more fragile and some operations (`xp_create_subdir`, `xp_delete_file`) still require explicit, one-by-one `GRANT EXECUTE` statements from a `sysadmin`, so most deployments simply use a dedicated `sysadmin` login for this tool.
+
 **On the SQL Server instance**, the login used to connect needs:
 
-- `ADMINISTER BULK OPERATIONS` permission (required by `OPENROWSET(...SINGLE_BLOB)`).
-- **Ad Hoc Distributed Queries** enabled:
+- Membership in the `sysadmin` fixed server role (recommended — see above), **or**, as a minimal alternative, all of the following granted individually:
+  ```sql
+  USE master;
+  GRANT EXECUTE ON xp_create_subdir TO [YourAppLoginName];
+  GRANT EXECUTE ON xp_delete_file TO [YourAppLoginName];
+  GRANT ADMINISTER BULK OPERATIONS TO [YourAppLoginName];
+  ```
+  plus `db_backupoperator` (or higher) and `db_owner`-level rights (for the log recovery/shrink commands) on every database the tool will manage.
+- **Ad Hoc Distributed Queries** enabled (requires `sysadmin` to run, one time, on the instance):
   ```sql
   EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
   EXEC sp_configure 'Ad Hoc Distributed Queries', 1; RECONFIGURE;
@@ -99,5 +96,3 @@ WITH RECOVERY
 - The `OPENROWSET(...SINGLE_BLOB)` read path caps each backup stripe at ~2 GB; very large databases will produce multiple `.bak` files inside the downloaded `.zip`.
 - Query validation uses a keyword blacklist, which is a strong practical safeguard but not a formal SQL parser — for untrusted users, pair it with a restricted, read-only SQL login.
 - Taking a backup temporarily switches the database's recovery model to `SIMPLE` and back to `FULL` during log shrink operations, which breaks the log backup chain; take a fresh full/differential backup afterward if point-in-time recovery matters to you.
-
-
